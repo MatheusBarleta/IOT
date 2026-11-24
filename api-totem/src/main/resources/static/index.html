@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do Totem</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --txt:#1b1f24; --mut:#667085; --ok:#12805c; --no:#c0392b; --off:#b7791f; --bd:#e4e7ec; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171a; --card:#1d2125; --txt:#e8eaed; --mut:#98a2b3; --ok:#3ecf9a; --no:#ff7b6b; --off:#f0b429; --bd:#2d333a; }
+  }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--txt); padding:16px; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  .bar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  input { padding:8px; border:1px solid var(--bd); border-radius:6px; background:var(--card); color:var(--txt); }
+  button { padding:8px 14px; border:0; border-radius:6px; cursor:pointer; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:12px; }
+  .card b { display:block; font-size:26px; }
+  .card span { color:var(--mut); font-size:13px; }
+  .wrap { overflow-x:auto; background:var(--card); border:1px solid var(--bd); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--bd); white-space:nowrap; }
+  .LIBERADO { color:var(--ok); font-weight:600; }
+  .NEGADO_DUPLICADO { color:var(--no); font-weight:600; }
+  .off { color:var(--off); font-weight:600; }
+  #msg { color:var(--mut); font-size:13px; margin:8px 0; }
+</style>
+</head>
+<body>
+<h1>Painel do Totem</h1>
+<div class="bar">
+  <input id="chave" type="password" placeholder="Chave da API">
+  <button id="ok">Conectar</button>
+</div>
+<div id="msg">Informe a chave para ver as leituras.</div>
+<div class="cards">
+  <div class="card"><b id="c-total">-</b><span>Total</span></div>
+  <div class="card"><b id="c-lib">-</b><span>Liberados</span></div>
+  <div class="card"><b id="c-neg">-</b><span>Negados</span></div>
+  <div class="card"><b id="c-off">-</b><span>Enviados offline</span></div>
+</div>
+<div class="wrap">
+<table>
+  <thead><tr><th>Horario</th><th>Totem</th><th>UID</th><th>Status</th><th>Offline</th></tr></thead>
+  <tbody id="corpo"></tbody>
+</table>
+</div>
+<script>
+let chave = "";
+let timer = null;
+
+function esc(t) {
+  const d = document.createElement("div");
+  d.textContent = t == null ? "" : String(t);
+  return d.innerHTML;
+}
+
+async function atualizar() {
+  try {
+    const h = { "X-API-Key": chave };
+    const [r1, r2] = await Promise.all([fetch("/api/leituras", { headers: h }), fetch("/api/resumo", { headers: h })]);
+    if (r1.status === 401 || r2.status === 401) {
+      document.getElementById("msg").textContent = "Chave invalida.";
+      clearInterval(timer);
+      return;
+    }
+    const leituras = await r1.json();
+    const resumo = await r2.json();
+    document.getElementById("c-total").textContent = resumo.total;
+    document.getElementById("c-lib").textContent = resumo.liberados;
+    document.getElementById("c-neg").textContent = resumo.negados;
+    document.getElementById("c-off").textContent = resumo.offline;
+    document.getElementById("corpo").innerHTML = leituras.map(l =>
+      "<tr><td>" + esc(new Date(l.recebido_em).toLocaleString("pt-BR")) + "</td>" +
+      "<td>" + esc(l.totem_id) + "</td>" +
+      "<td>" + esc(l.uid) + "</td>" +
+      "<td class='" + esc(l.status) + "'>" + esc(l.status) + "</td>" +
+      "<td>" + (l.offline ? "<span class='off'>sim</span>" : "nao") + "</td></tr>").join("");
+    document.getElementById("msg").textContent = "Atualizado as " + new Date().toLocaleTimeString("pt-BR") + " (a cada 2 s)";
+  } catch (e) {
+    document.getElementById("msg").textContent = "Falha ao falar com a API.";
+  }
+}
+
+document.getElementById("ok").onclick = () => {
+  chave = document.getElementById("chave").value;
+  clearInterval(timer);
+  atualizar();
+  timer = setInterval(atualizar, 2000);
+};
+</script>
+</body>
+</html>
